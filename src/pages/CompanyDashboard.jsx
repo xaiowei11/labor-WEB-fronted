@@ -1,0 +1,544 @@
+// src/pages/CompanyDashboard.jsx
+import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
+import api from '../services/api'; // 確保路徑正確
+
+const CompanyDashboard = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('workers');
+  const [workers, setWorkers] = useState([]); 
+  const [forms, setForms] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [error, setError] = useState('');
+  
+  // 新增勞工表單狀態
+  const [showAddWorkerForm, setShowAddWorkerForm] = useState(false);
+  const [workerFormData, setWorkerFormData] = useState({
+    name: '',
+    code: ''
+  });
+  
+  // 新增使用者表單狀態
+  const [showAddUserForm, setShowAddUserForm] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    username: '',
+    login_code: '',
+    password: '',
+    confirm_password: '',
+    role: 'admin'
+  });
+  
+  // 檢查用戶是否已登入且是公司管理員或老闆
+  useEffect(() => {
+    const checkAuth = () => {
+      try {
+        const userData = JSON.parse(localStorage.getItem('user') || '{}');
+        if (userData && userData.id && (userData.role === 'owner' || userData.role === 'admin')) {
+          setUser(userData);
+        }
+        setLoading(false);
+      } catch (err) {
+        console.error('解析用戶資料錯誤', err);
+        setLoading(false);
+      }
+    };
+    
+    checkAuth();
+  }, []);
+  
+  // 載入勞工、表單和使用者資料
+  useEffect(() => {
+    if (!user || !user.company) return;
+    
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // 載入勞工資料
+        try {
+          const workersResponse = await api.workers.getAll(user.company);
+          if (Array.isArray(workersResponse.data)) {
+            setWorkers(workersResponse.data);
+          } else {
+            console.error('勞工資料不是陣列:', workersResponse.data);
+            setWorkers([]);
+          }
+        } catch (err) {
+          console.error('載入勞工資料失敗:', err);
+          setWorkers([]);
+        }
+        
+        // 載入表單類型資料
+        try {
+          const formsResponse = await api.forms.getTypes();
+          if (Array.isArray(formsResponse.data)) {
+            setForms(formsResponse.data);
+          } else {
+            console.error('表單資料不是陣列:', formsResponse.data);
+            setForms([]);
+          }
+        } catch (err) {
+          console.error('載入表單資料失敗:', err);
+          setForms([]);
+        }
+        
+        // 載入公司使用者資料
+        try {
+          const usersResponse = await api.users.getCompanyUsers(user.company);
+          if (Array.isArray(usersResponse.data)) {
+            setUsers(usersResponse.data);
+          } else {
+            console.error('用戶資料不是陣列:', usersResponse.data);
+            setUsers([]);
+          }
+        } catch (err) {
+          console.error('載入用戶資料失敗:', err);
+          setUsers([]);
+        }
+        
+      } catch (err) {
+        console.error('無法載入資料', err);
+        setError('無法載入資料，請重新整理頁面');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [user]);
+  
+  // 處理勞工表單輸入變更
+  const handleWorkerInputChange = (e) => {
+    const { name, value } = e.target;
+    setWorkerFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  // 處理使用者表單輸入變更
+  const handleUserInputChange = (e) => {
+    const { name, value } = e.target;
+    setUserFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  // 新增勞工
+  const handleAddWorker = async (e) => {
+    e.preventDefault();
+    
+    try {
+      // 準備勞工資料
+      const workerData = {
+        ...workerFormData,
+        company: user.company
+      };
+      
+      // 新增勞工
+      const response = await api.workers.create(workerData);
+      
+      // 新增成功，更新勞工列表
+      setWorkers(prev => [...prev, response.data]);
+      
+      // 重置表單
+      setWorkerFormData({
+        name: '',
+        code: ''
+      });
+      
+      // 隱藏表單
+      setShowAddWorkerForm(false);
+      
+    } catch (err) {
+      console.error('新增勞工失敗', err);
+      setError(err.response?.data?.message || '新增勞工失敗');
+    }
+  };
+  
+  // 新增使用者
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    
+    // 檢查密碼是否一致
+    if (userFormData.password !== userFormData.confirm_password) {
+      setError('兩次輸入的密碼不一致');
+      return;
+    }
+    else if (userFormData.password.length < 8) {
+      setError('密碼長度至少為8個字符');
+      return;
+    }
+    
+    try {
+      // 準備使用者資料
+      const userData = {
+        username: userFormData.username,
+        login_code: userFormData.login_code,
+        password: userFormData.password,
+        role: userFormData.role,
+        company: user.company
+      };
+
+      // 新增使用者
+      console.log('準備發送的用戶數據:', userData);
+      console.log('發送的完整數據:', JSON.stringify(userData));
+      const response = await api.users.create(userData);
+      console.log('API 響應:', response);
+      
+      // 新增成功，更新使用者列表
+      setUsers(prev => [...prev, response.data]);
+      console.log('新增使用者成功:', response.data);
+      
+      // 重置表單
+      setUserFormData({
+        username: '',
+        login_code: '',
+        password: '',
+        confirm_password: '',
+        role: 'admin'
+      });
+      
+      // 隱藏表單
+      setShowAddUserForm(false);
+      
+    } catch (err) {
+      console.error('完整錯誤:', err);
+      console.error('錯誤狀態:', err.response?.status);
+      console.error('錯誤數據:', err.response?.data);
+      console.error('新增使用者失敗', err);
+      setError(err.response?.data?.message || '新增使用者失敗');
+    }
+  };
+  
+  // 生成勞工專屬連結
+  const generateWorkerLink = (worker) => {
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/form?worker_id=${worker.id}&company_code=${worker.company_code || ''}`;
+  };
+  
+  // 複製連結到剪貼簿
+  const copyLinkToClipboard = (link) => {
+    navigator.clipboard.writeText(link)
+      .then(() => {
+        alert('連結已複製到剪貼簿');
+      })
+      .catch(err => {
+        console.error('複製失敗:', err);
+        alert('複製失敗，請手動複製連結');
+      });
+  };
+  
+  // 登出
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+  };
+  
+  // 如果正在載入，顯示載入中
+  if (loading) {
+    return <div className="loading">載入中...</div>;
+  }
+  
+  // 如果未登入或不是公司管理員/老闆，重定向到登入頁面
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+  
+  return (
+    <div className="company-dashboard">
+      <header className="dashboard-header">
+        <h1>公司管理儀表板</h1>
+        <div className="user-info">
+          <span>您好，{user.username}</span>
+          <button className="logout-btn" onClick={handleLogout}>登出</button>
+        </div>
+      </header>
+      
+      <nav className="dashboard-nav">
+        <ul>
+          <li 
+            className={activeTab === 'workers' ? 'active' : ''} 
+            onClick={() => setActiveTab('workers')}
+          >
+            勞工管理
+          </li>
+          <li 
+            className={activeTab === 'forms' ? 'active' : ''} 
+            onClick={() => setActiveTab('forms')}
+          >
+            表單數據
+          </li>
+          <li 
+            className={activeTab === 'users' ? 'active' : ''} 
+            onClick={() => setActiveTab('users')}
+          >
+            使用者管理
+          </li>
+        </ul>
+      </nav>
+      
+      <main className="dashboard-content">
+        {error && <div className="error-message">{error}</div>}
+        
+        {/* 勞工管理 */}
+        {activeTab === 'workers' && (
+          <div className="workers-management">
+            <div className="section-header">
+              <h2>勞工管理</h2>
+              <button 
+                className="add-button"
+                onClick={() => setShowAddWorkerForm(!showAddWorkerForm)}
+              >
+                {showAddWorkerForm ? '取消' : '新增勞工'}
+              </button>
+            </div>
+            
+            {/* 新增勞工表單 */}
+            {showAddWorkerForm && (
+              <form onSubmit={handleAddWorker} className="add-form">
+                <div className="form-group">
+                  <label htmlFor="name">姓名</label>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={workerFormData.name}
+                    onChange={handleWorkerInputChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="code">勞工代碼</label>
+                  <input
+                    type="text"
+                    id="code"
+                    name="code"
+                    value={workerFormData.code}
+                    onChange={handleWorkerInputChange}
+                    required
+                    maxLength={10}
+                  />
+                  <small>最多10個字符，用於識別勞工</small>
+                </div>
+                
+                <button type="submit" className="submit-button">新增勞工</button>
+              </form>
+            )}
+            
+            {/* 勞工列表 */}
+            <div className="workers-list">
+              {workers.length === 0 ? (
+                <p>目前還沒有勞工資料</p>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>姓名</th>
+                      <th>勞工代碼</th>
+                      <th>專屬連結</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.isArray(workers) && workers.map(worker => (
+                      <tr key={worker.id}>
+                        <td>{worker.name}</td>
+                        <td>{worker.code}</td>
+                        <td>
+                          <div className="link-container">
+                            <span className="worker-link">{generateWorkerLink(worker)}</span>
+                            <button 
+                              className="copy-button"
+                              onClick={() => copyLinkToClipboard(generateWorkerLink(worker))}
+                            >
+                              複製
+                            </button>
+                          </div>
+                        </td>
+                        <td>
+                          <button className="action-button view">查看資料</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* 表單數據 */}
+        {activeTab === 'forms' && (
+          <div className="forms-data">
+            <h2>表單數據</h2>
+            <p>選擇勞工以查看其填寫的表單數據</p>
+            
+            <div className="worker-selector">
+              <label htmlFor="worker-select">選擇勞工：</label>
+              <select id="worker-select">
+                <option value="">-- 請選擇勞工 --</option>
+                {Array.isArray(workers) && workers.map(worker => (
+                  <option key={worker.id} value={worker.id}>
+                    {worker.name} ({worker.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* 這裡將顯示選定勞工的表單數據 */}
+            <div className="form-data-container">
+              <p>請選擇勞工以查看其填寫的表單數據</p>
+            </div>
+          </div>
+        )}
+        
+        {/* 使用者管理 */}
+        {activeTab === 'users' && (
+          <div className="users-management">
+            <div className="section-header">
+              <h2>使用者管理</h2>
+              {user.role === 'owner' && (
+                <button 
+                  className="add-button"
+                  onClick={() => setShowAddUserForm(!showAddUserForm)}
+                >
+                  {showAddUserForm ? '取消' : '新增使用者'}
+                </button>
+              )}
+            </div>
+            
+            {/* 新增使用者表單 */}
+            {showAddUserForm && user.role === 'owner' && (
+              <form onSubmit={handleAddUser} className="add-form">
+                <div className="form-group">
+                  <label htmlFor="username">使用者名稱</label>
+                  <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    value={userFormData.username}
+                    onChange={handleUserInputChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="login_code">登入代碼</label>
+                  <input
+                    type="text"
+                    id="login_code"
+                    name="login_code"
+                    value={userFormData.login_code}
+                    onChange={handleUserInputChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="password">密碼</label>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    value={userFormData.password}
+                    onChange={handleUserInputChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="confirm_password">確認密碼</label>
+                  <input
+                    type="password"
+                    id="confirm_password"
+                    name="confirm_password"
+                    value={userFormData.confirm_password}
+                    onChange={handleUserInputChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="role">角色</label>
+                  <select
+                    id="role"
+                    name="role"
+                    value={userFormData.role}
+                    onChange={handleUserInputChange}
+                    required
+                  >
+                    <option value="admin">公司管理員</option>
+                    <option value="experimenter">實驗者</option>
+                  </select>
+                </div>
+                
+                <button type="submit" className="submit-button">新增使用者</button>
+              </form>
+            )}
+            
+            {/* 使用者列表 */}
+            <div className="users-list">
+              {users.length === 0 ? (
+                <p>目前沒有使用者資料</p>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>使用者名稱</th>
+                      <th>登入代碼</th>
+                      <th>角色</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.isArray(users) && users.map(user => (
+                      <tr key={user.id}>
+                        <td>{user.username}</td>
+                        <td>{user.login_code}</td>
+                        <td>{user.role === 'owner' ? '公司負責人' : 
+                             user.role === 'admin' ? '公司管理員' : 
+                             user.role === 'experimenter' ? '實驗者' : '未知'}</td>
+                        <td>
+                          {user.role !== 'owner' && (
+                            <button 
+                              className="action-button delete"
+                              onClick={() => {
+                                if (window.confirm('確定要刪除此使用者嗎？')) {
+                                  api.users.delete(user.id)
+                                    .then(() => {
+                                      setUsers(prev => prev.filter(u => u.id !== user.id));
+                                    })
+                                    .catch(err => {
+                                      console.error('刪除使用者失敗', err);
+                                      setError('刪除使用者失敗');
+                                    });
+                                }
+                              }}
+                            >
+                              刪除
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+      
+      <footer className="dashboard-footer">
+        <p>&copy; 2025 勞工健康數據平台</p>
+      </footer>
+    </div>
+  );
+};
+
+export default CompanyDashboard;
