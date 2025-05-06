@@ -132,3 +132,32 @@ button {
     font-size: 18px;
     color: #3498db;
 }
+
+/* 在您的 CSS 文件中添加 */
+.cooldown-timer {
+    margin: 15px 0;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    text-align: center;
+  }
+  
+  .cooldown-timer p {
+    margin-bottom: 8px;
+    color: #555;
+    font-weight: 500;
+  }
+  
+  .progress-bar {
+    height: 10px;
+    background-color: #e9ecef;
+    border-radius: 5px;
+    overflow: hidden;
+    margin: 8px 0;
+  }
+  
+  .progress-fill {
+    height: 100%;
+    background-color: #4caf50;
+    transition: width 1s linear;
+  }

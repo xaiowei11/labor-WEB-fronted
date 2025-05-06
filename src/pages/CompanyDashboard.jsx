@@ -1,4 +1,3 @@
-// src/pages/CompanyDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import api from '../services/api'; // 確保路徑正確
@@ -11,7 +10,14 @@ const CompanyDashboard = () => {
   const [forms, setForms] = useState([]);
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
-  
+  const [companyCode, setCompanyCode] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [selectedWorkerId, setSelectedWorkerId] = useState('');
+  const [formSubmissions, setFormSubmissions] = useState([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [activeSubmission, setActiveSubmission] = useState(null);
+
   // 新增勞工表單狀態
   const [showAddWorkerForm, setShowAddWorkerForm] = useState(false);
   const [workerFormData, setWorkerFormData] = useState({
@@ -46,6 +52,29 @@ const CompanyDashboard = () => {
     
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      // 直接使用这个公司代码
+      setCompanyCode(user.company_code || '1111'); // 暂时使用硬编码的公司代码
+      
+      // 或者，尝试使用getAll方法获取所有公司，然后找到当前公司
+      api.companies.getAll()
+        .then(response => {
+          if (Array.isArray(response.data)) {
+            const currentCompany = response.data.find(c => c.id === user.company);
+            if (currentCompany) {
+              setCompanyCode(currentCompany.code);
+              setCompanyName(currentCompany.name);
+              console.log('设置公司資訊:', currentCompany.code, currentCompany.name);
+            }
+          }
+        })
+        .catch(err => {
+          console.error('无法加载公司列表:', err);
+        });
+    }
+  }, [user]);
   
   // 載入勞工、表單和使用者資料
   useEffect(() => {
@@ -124,6 +153,11 @@ const CompanyDashboard = () => {
       ...prev,
       [name]: value
     }));
+  };
+
+  const showSubmissionDetails = (submission) => {
+    setActiveSubmission(submission);
+    setShowFormModal(true);
   };
   
   // 新增勞工
@@ -216,7 +250,8 @@ const CompanyDashboard = () => {
   // 生成勞工專屬連結
   const generateWorkerLink = (worker) => {
     const baseUrl = window.location.origin;
-    return `${baseUrl}/form?worker_id=${worker.id}&company_code=${worker.company_code || ''}`;
+    // 使用勞工代碼(code)而非ID，並確保使用公司代碼(code)而非ID
+    return `${baseUrl}/form?worker_code=${worker.code}&company_code=${companyCode}`;
   };
   
   // 複製連結到剪貼簿
@@ -230,6 +265,41 @@ const CompanyDashboard = () => {
         alert('複製失敗，請手動複製連結');
       });
   };
+
+  const loadWorkerSubmissions = async (workerId) => {
+    if (!workerId) return;
+    
+    try {
+      setLoadingSubmissions(true);
+      const response = await api.forms.getSubmissions(workerId);
+      
+      if (Array.isArray(response.data)) {
+        setFormSubmissions(response.data);
+      } else {
+        console.error('表單提交記錄不是陣列:', response.data);
+        setFormSubmissions([]);
+      }
+    } catch (err) {
+      console.error('載入表單提交記錄失敗:', err);
+      setFormSubmissions([]);
+      setError('無法載入表單提交記錄');
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  };
+  
+  // 處理勞工選擇變更
+  const handleWorkerSelect = (e) => {
+    const workerId = e.target.value;
+    setSelectedWorkerId(workerId);
+    
+    if (workerId) {
+      loadWorkerSubmissions(workerId);
+    } else {
+      setFormSubmissions([]);
+    }
+  };
+  
   
   // 登出
   const handleLogout = () => {
@@ -251,7 +321,7 @@ const CompanyDashboard = () => {
   return (
     <div className="company-dashboard">
       <header className="dashboard-header">
-        <h1>公司管理儀表板</h1>
+        <h1>{companyName}管理儀表板</h1>
         <div className="user-info">
           <span>您好，{user.username}</span>
           <button className="logout-btn" onClick={handleLogout}>登出</button>
@@ -261,7 +331,7 @@ const CompanyDashboard = () => {
       <nav className="dashboard-nav">
         <ul>
           <li 
-            className={activeTab === 'workers' ? 'active' : ''} 
+            className={activeTab === 'workers' ? 'active' : ''}   
             onClick={() => setActiveTab('workers')}
           >
             勞工管理
@@ -380,7 +450,11 @@ const CompanyDashboard = () => {
             
             <div className="worker-selector">
               <label htmlFor="worker-select">選擇勞工：</label>
-              <select id="worker-select">
+              <select 
+                id="worker-select" 
+                value={selectedWorkerId} 
+                onChange={handleWorkerSelect}
+              >
                 <option value="">-- 請選擇勞工 --</option>
                 {Array.isArray(workers) && workers.map(worker => (
                   <option key={worker.id} value={worker.id}>
@@ -390,9 +464,46 @@ const CompanyDashboard = () => {
               </select>
             </div>
             
-            {/* 這裡將顯示選定勞工的表單數據 */}
+            {/* 表單數據顯示 */}
             <div className="form-data-container">
-              <p>請選擇勞工以查看其填寫的表單數據</p>
+              {!selectedWorkerId ? (
+                <p>請選擇勞工以查看其填寫的表單數據</p>
+              ) : loadingSubmissions ? (
+                <p>載入中...</p>
+              ) : formSubmissions.length === 0 ? (
+                <p>該勞工尚未提交任何表單</p>
+              ) : (
+                <div className="submissions-list">
+                  <h3>表單提交記錄</h3>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>提交時間</th>
+                        <th>表單類型</th>
+                        <th>批次</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formSubmissions.map(submission => (
+                        <tr key={submission.id}>
+                          <td>{new Date(submission.submission_time).toLocaleString()}</td>
+                          <td>{submission.form_type_name}</td>
+                          <td>第 {submission.submission_count} 批次</td>
+                          <td>
+                          <button 
+                            className="action-button view"
+                            onClick={() => showSubmissionDetails(submission)}
+                          >
+                            查看詳情
+                          </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -537,6 +648,37 @@ const CompanyDashboard = () => {
       <footer className="dashboard-footer">
         <p>&copy; 2025 勞工健康數據平台</p>
       </footer>
+      
+      {showFormModal && activeSubmission && (
+      <div className="modal-overlay">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h3>表單詳情</h3>
+            <button 
+              className="close-button"
+              onClick={() => setShowFormModal(false)}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="modal-body">
+            <p><strong>提交時間:</strong> {new Date(activeSubmission.submission_time).toLocaleString()}</p>
+            <p><strong>表單類型:</strong> {activeSubmission.form_type_name}</p>
+            <p><strong>批次:</strong> 第 {activeSubmission.submission_count} 批次</p>
+            
+            <h4>填寫內容:</h4>
+            <div className="form-data-display">
+              {Object.entries(activeSubmission.data).map(([key, value]) => (
+                <div key={key} className="form-data-item">
+                  <strong>{key.replace(/_/g, ' ')}:</strong> {value}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
     </div>
   );
 };

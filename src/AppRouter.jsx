@@ -7,12 +7,12 @@ import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import CompanyDashboard from './pages/CompanyDashboard';
 import ExperimenterDashboard from './pages/ExperimenterDashboard';
-import WorkerFormPage from './pages/WorkerFormPage';
+import WorkerFormPage from './components/forms/WorkerFormPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 // 身份驗證保護組件
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const user = JSON.parse(localStorage.getItem('user'));
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
   const token = localStorage.getItem('token');
   
   if (!token || !user) {

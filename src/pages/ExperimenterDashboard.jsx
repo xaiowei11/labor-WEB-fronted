@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import axios from 'axios';
+import ExperimentDetail from '../components/experimenter/ExperimentDetail';
+import '../styles/ExperimenterDashboard.css';
 
 const ExperimenterDashboard = () => {
   const [user, setUser] = useState(null);
@@ -10,6 +12,8 @@ const ExperimenterDashboard = () => {
   const [experiments, setExperiments] = useState([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [selectedExperiment, setSelectedExperiment] = useState(null);
+  const [showExperimentDetail, setShowExperimentDetail] = useState(false);
   
   // 新增實驗表單狀態
   const [showAddExperimentForm, setShowAddExperimentForm] = useState(false);
@@ -202,6 +206,18 @@ const ExperimenterDashboard = () => {
     }
   };
   
+  // 處理查看實驗詳情
+  const handleViewExperiment = (experiment) => {
+    setSelectedExperiment(experiment);
+    setShowExperimentDetail(true);
+  };
+  
+  // 關閉實驗詳情模態框
+  const handleCloseExperimentDetail = () => {
+    setShowExperimentDetail(false);
+    setSelectedExperiment(null);
+  };
+  
   // 如果正在載入，顯示載入中
   if (loading) {
     return <div className="loading">載入中...</div>;
@@ -353,7 +369,7 @@ const ExperimenterDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-              {Array.isArray(experiments) && experiments.map(experiment => (
+                {Array.isArray(experiments) && experiments.map(experiment => (
                   <tr key={experiment.id}>
                     <td>{experiment.worker_name}</td>
                     <td>
@@ -362,7 +378,12 @@ const ExperimenterDashboard = () => {
                     </td>
                     <td>{new Date(experiment.experiment_time).toLocaleString()}</td>
                     <td>
-                      <button className="action-button view">查看詳情</button>
+                      <button 
+                        className="action-button view"
+                        onClick={() => handleViewExperiment(experiment)}
+                      >
+                        查看詳情
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -371,6 +392,15 @@ const ExperimenterDashboard = () => {
           )}
         </div>
       </main>
+      
+      {/* 實驗詳情模態框 */}
+      {showExperimentDetail && selectedExperiment && (
+        <ExperimentDetail
+          experiment={selectedExperiment}
+          experimentTypes={experimentTypes}
+          onClose={handleCloseExperimentDetail}
+        />
+      )}
       
       <footer className="dashboard-footer">
         <p>&copy; 2025 勞工健康數據平台</p>

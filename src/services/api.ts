@@ -40,7 +40,7 @@ const api = {
   // 公司相關
   companies: {
     getAll: () => apiClient.get('/api/companies/'),
-    ggetOne: (id, config) => apiClient.get(`/api/workers/${id}/`, config),
+    getOne: (id, config) => apiClient.get(`/api/companies/${id}/`, config),
     // 修正創建公司的 API 端點，根據後端路由定義
     create: (data) => apiClient.post('/api/companies/create/', data),
     update: (id, data) => apiClient.put(`/api/companies/${id}/`, data),
