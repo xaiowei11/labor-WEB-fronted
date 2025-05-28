@@ -161,3 +161,78 @@ button {
     background-color: #4caf50;
     transition: width 1s linear;
   }
+  .time-segment-info {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 0.5rem;
+    padding: 2px 6px;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  /* 階段信息消息 */
+.stage-info-message {
+    background-color: #f8f9fa;
+    border-left: 4px solid #17a2b8;
+    padding: 10px 15px;
+    margin-bottom: 15px;
+    color: #495057;
+  }
+  
+  /* 已提交時段歷史 */
+  .segment-history {
+    margin-top: 8px;
+    font-size: 0.9rem;
+  }
+  
+  .segment-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  
+  .segment-dot {
+    color: #28a745;
+    cursor: help;
+  }
+  
+  /* 有提交記錄的表單 */
+  .form-card.has-submissions {
+    border-left: 4px solid #28a745;
+  }
+
+  /* 等待進入下一階段的樣式 */
+.waiting-next-stage {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  
+  .wait-timer-container {
+    margin-top: 12px;
+  }
+  
+  .wait-timer-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  
+  .wait-timer-progress {
+    height: 12px;
+    background-color: #e9ecef;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  
+  .wait-timer-bar {
+    height: 100%;
+    background-color: #4a86e8; /* 藍色進度條 */
+    border-radius: 6px;
+    transition: width 1s linear; /* 平滑過渡 */
+  }

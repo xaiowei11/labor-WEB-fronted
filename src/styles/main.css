@@ -123,6 +123,7 @@
   
   .action-button.delete {
     background-color: var(--error-color);
+    margin-top: 10px;
   }
   
   .copy-button {

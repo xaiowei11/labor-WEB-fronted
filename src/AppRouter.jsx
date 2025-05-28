@@ -2,6 +2,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
+
 // 導入頁面組件
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
@@ -9,6 +10,8 @@ import CompanyDashboard from './pages/CompanyDashboard';
 import ExperimenterDashboard from './pages/ExperimenterDashboard';
 import WorkerFormPage from './components/forms/WorkerFormPage';
 import NotFoundPage from './pages/NotFoundPage';
+import SuperExperimenterDashboard from './pages/SuperExperimenterDashboard';
+
 
 // 身份驗證保護組件
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -74,6 +77,17 @@ const AppRouter = () => {
             </ProtectedRoute>
           } 
         />
+
+        {/* 超級實驗者專用頁面 */}
+        <Route 
+          path="/super-experimenter/dashboard" 
+          element={
+            <ProtectedRoute allowedRoles={['super_experimenter']}>
+              <SuperExperimenterDashboard />
+            </ProtectedRoute>
+          } 
+        />
+
         
         {/* 首頁重定向 */}
         <Route path="/" element={<Navigate to="/login" />} />
@@ -82,6 +96,8 @@ const AppRouter = () => {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Router>
+
+    
   );
 };
 

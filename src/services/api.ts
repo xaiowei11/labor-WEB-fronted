@@ -28,7 +28,7 @@ apiClient.interceptors.request.use(
 const api = {
   // 認證相關
   auth: {
-    login: (companyCode, loginCode, password) => 
+    login: (companyCode: string, loginCode: string, password: string) => 
       apiClient.post('/api/login/', { 
         company_code: companyCode, 
         login_code: loginCode, 
@@ -39,49 +39,185 @@ const api = {
   
   // 公司相關
   companies: {
+    // 獲取所有公司（需要認證，給管理員使用）
     getAll: () => apiClient.get('/api/companies/'),
-    getOne: (id, config) => apiClient.get(`/api/companies/${id}/`, config),
+    
+    // 新增：獲取公開的公司列表（不需要認證，給登入頁面使用）
+    getPublicList: () => {
+      // 創建一個不帶認證的請求
+      const publicClient = axios.create({
+        baseURL: 'http://localhost:8000',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      });
+      return publicClient.get('/api/public/companies/');
+    },
+    
+    getOne: (id: number, config?: any) => apiClient.get(`/api/companies/${id}/`, config),
+    
     // 修正創建公司的 API 端點，根據後端路由定義
-    create: (data) => apiClient.post('/api/companies/create/', data),
-    update: (id, data) => apiClient.put(`/api/companies/${id}/`, data),
-    delete: (id) => apiClient.delete(`/api/companies/${id}/`),
+    create: (data: any) => apiClient.post('/api/companies/create/', data),
+    
+    update: (id: number, data: any) => apiClient.put(`/api/companies/${id}/`, data),
+    
+    delete: (id: number) => apiClient.delete(`/api/companies/${id}/`),
   },
   
   // 勞工相關
   workers: {
-    getAll: (companyId) => apiClient.get(`/api/companies/${companyId}/workers/`),
-    getOne: (id, config) => apiClient.get(`/api/workers/${id}/`, config),
-    create: (data) => apiClient.post('/api/workers/', data),
-    update: (id, data) => apiClient.put(`/api/workers/${id}/`, data),
-    delete: (id) => apiClient.delete(`/api/workers/${id}/`),
-    getForms: (workerId) => apiClient.get(`/api/workers/${workerId}/forms/`),
+    // 獲取公司所有勞工
+    getAll: (companyId: number) => apiClient.get(`/api/companies/${companyId}/workers/`),
+    
+    // 獲取特定勞工
+    getOne: (id: number, config?: any) => apiClient.get(`/api/workers/${id}/`, config),
+    
+    // 通過代碼獲取勞工（公開API，不需要認證）
+    getByCode: (workerCode: string, companyCode: string) => {
+      const publicClient = axios.create({
+        baseURL: 'http://localhost:8000',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      });
+      return publicClient.get('/api/public/worker-by-code/', {
+        params: { 
+          worker_code: workerCode, 
+          company_code: companyCode 
+        }
+      });
+    },
+    
+    // 創建勞工
+    create: (data: any) => apiClient.post('/api/workers/', data),
+    
+    // 更新勞工
+    update: (id: number, data: any) => apiClient.put(`/api/workers/${id}/`, data),
+    
+    // 刪除勞工
+    delete: (id: number) => apiClient.delete(`/api/workers/${id}/`),
+    
+    // 強制刪除勞工（刪除勞工及其所有相關資料）
+    forceDelete: (id: number) => apiClient.delete(`/api/workers/${id}/force/`),
+    
+    // 獲取勞工的表單
+    getForms: (workerId: number) => apiClient.get(`/api/workers/${workerId}/forms/`),
+    
+    // 獲取勞工的實驗記錄
+    getExperiments: (workerId: number) => apiClient.get(`/api/workers/${workerId}/experiments/`),
   },
   
   // 表單相關
   forms: {
+    // 獲取表單類型
     getTypes: () => apiClient.get('/api/form-types/'),
-    submit: (workerId, formTypeId, formData) => 
-      apiClient.post('/api/forms/submit/', { worker_id: workerId, form_type_id: formTypeId, form_data: formData }),
-    getSubmissions: (workerId) => apiClient.get(`/api/workers/${workerId}/submissions/`),
+    
+    // 獲取公開的表單類型（不需要認證）
+    getPublicTypes: () => {
+      const publicClient = axios.create({
+        baseURL: 'http://localhost:8000',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      });
+      return publicClient.get('/api/public/form-types/');
+    },
+    
+    // 提交表單
+    submit: (workerId: number, formTypeId: number, formData: any) => 
+      apiClient.post('/api/forms/submit/', { 
+        worker_id: workerId, 
+        form_type_id: formTypeId, 
+        form_data: formData 
+      }),
+    
+    // 公開提交表單（不需要認證）
+    submitPublic: (data: any) => {
+      const publicClient = axios.create({
+        baseURL: 'http://localhost:8000',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      });
+      return publicClient.post('/api/public/forms/submit/', data);
+    },
+    
+    // 獲取勞工的表單提交記錄
+    getSubmissions: (workerId: number) => apiClient.get(`/api/workers/${workerId}/submissions/`),
+    
+    // 獲取公開的勞工提交記錄
+    getPublicSubmissions: (workerCode: string, companyCode: string) => {
+      const publicClient = axios.create({
+        baseURL: 'http://localhost:8000',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      });
+      return publicClient.get('/api/public/worker-submissions/', {
+        params: {
+          worker_code: workerCode,
+          company_code: companyCode
+        }
+      });
+    },
   },
   
   // 實驗相關
   experiments: {
+    // 獲取實驗者的所有實驗
     getAll: () => apiClient.get('/api/experimenter/experiments/'),
-    create: (data) => apiClient.post('/api/experiments/', data),
-    getWorkerExperiments: (workerId) => apiClient.get(`/api/workers/${workerId}/experiments/`),
+    
+    // 創建實驗
+    create: (data: any) => {
+      // 如果數據包含文件，使用 FormData
+      if (data instanceof FormData) {
+        return apiClient.post('/api/experiments/', data, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      }
+      return apiClient.post('/api/experiments/', data);
+    },
+    
+    // 更新實驗
+    update: (id: number, data: any) => apiClient.put(`/api/experiments/${id}/`, data),
+    
+    // 獲取勞工的實驗記錄
+    getWorkerExperiments: (workerId: number) => apiClient.get(`/api/workers/${workerId}/experiments/`),
+    
+    // 獲取公司的實驗記錄
+    getCompanyExperiments: () => apiClient.get('/api/companies/experiments/'),
+    
+    // 超級實驗者獲取所有實驗
+    getSuperExperimenterExperiments: () => apiClient.get('/api/super-experimenter/experiments/'),
   },
   
   // 使用者相關
   users: {
-    getCompanyUsers: (companyId) => apiClient.get(`/api/companies/${companyId}/users/`),
-    create: (data) => {
+    // 獲取公司使用者
+    getCompanyUsers: (companyId: number) => apiClient.get(`/api/companies/${companyId}/users/`),
+    
+    // 創建使用者
+    create: (data: any) => {
       console.log('API 客戶端接收到的用戶數據:', data); // 添加這行來調試
       return apiClient.post('/api/users/', data);
     },  
-    update: (id, data) => apiClient.put(`/api/users/${id}/`, data),
-    delete: (id) => apiClient.delete(`/api/users/${id}/`),
-  }
+    
+    // 獲取使用者詳情
+    getOne: (id: number) => apiClient.get(`/api/users/${id}/`),
+    
+    // 更新使用者
+    update: (id: number, data: any) => apiClient.patch(`/api/users/${id}/`, data),
+    
+    // 刪除使用者
+    delete: (id: number) => apiClient.delete(`/api/users/${id}/`),
+  },
 };
 
 export default api;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import api from '../services/api'; // 確保路徑正確
 
 const CompanyDashboard = () => {
@@ -34,6 +35,25 @@ const CompanyDashboard = () => {
     confirm_password: '',
     role: 'admin'
   });
+
+  // Toast 通知配置
+  const TOAST_CONFIG = {
+  SUCCESS: {
+    position: "top-center",
+    autoClose: 2000,
+    theme: "light"
+  },
+  ERROR: {
+    position: "top-center", 
+    autoClose: 2000,
+    theme: "light"
+  },
+  WARNING: {
+    position: "top-center",
+    autoClose: 3000,
+    theme: "light"
+  }
+};
   
   // 檢查用戶是否已登入且是公司管理員或老闆
   useEffect(() => {
@@ -66,12 +86,12 @@ const CompanyDashboard = () => {
             if (currentCompany) {
               setCompanyCode(currentCompany.code);
               setCompanyName(currentCompany.name);
-              console.log('设置公司資訊:', currentCompany.code, currentCompany.name);
+              console.log('設置公司資訊:', currentCompany.code, currentCompany.name);
             }
           }
         })
         .catch(err => {
-          console.error('无法加载公司列表:', err);
+          console.error('無法載入公司列表:', err);
         });
     }
   }, [user]);
@@ -145,6 +165,53 @@ const CompanyDashboard = () => {
       [name]: value
     }));
   };
+
+  // 刪除勞工
+  // 簡化的刪除勞工函數 - 替換 CompanyDashboard.jsx 中的 handleDeleteWorker
+
+const handleDeleteWorker = async (workerId, workerName) => {
+  try {
+    // 第一次確認：一般刪除
+    if (!window.confirm(`確定要刪除勞工 "${workerName}" 嗎？`)) {
+      return;
+    }
+    
+    await api.workers.delete(workerId);
+    
+    // 刪除成功，更新本地勞工列表
+    setWorkers(prev => prev.filter(worker => worker.id !== workerId));
+    toast.success('刪除勞工成功', TOAST_CONFIG.SUCCESS);
+    
+  } catch (err) {
+    console.error('刪除勞工失敗', err);
+    
+    // 如果是因為有相關資料而無法刪除（400錯誤）
+    if (err.response && err.response.status === 400) {
+      // 第二次確認：強制刪除
+      const confirmForceDelete = window.confirm(
+        `勞工 "${workerName}" 有相關資料記錄。\n\n確定要刪除該勞工及其所有相關資料嗎？\n\n注意：此操作無法復原！`
+      );
+      
+      if (confirmForceDelete) {
+        try {
+          // 使用強制刪除
+          await api.workers.forceDelete(workerId);
+          
+          // 刪除成功，更新本地勞工列表
+          setWorkers(prev => prev.filter(worker => worker.id !== workerId));
+          toast.success(`勞工 "${workerName}" 及其所有相關資料已刪除`, TOAST_CONFIG.SUCCESS);
+          
+        } catch (forceErr) {
+          console.error('強制刪除失敗', forceErr);
+          toast.error('刪除失敗，請稍後再試', TOAST_CONFIG.ERROR);
+        }
+      }
+    } else {
+      // 其他錯誤
+      toast.error('刪除勞工失敗', TOAST_CONFIG.ERROR);
+    }
+  }
+};
   
   // 處理使用者表單輸入變更
   const handleUserInputChange = (e) => {
@@ -158,6 +225,18 @@ const CompanyDashboard = () => {
   const showSubmissionDetails = (submission) => {
     setActiveSubmission(submission);
     setShowFormModal(true);
+  };
+
+  const getStageNameById = (stageId) => {
+    const stages = [
+      '第一時段',
+      '中午表單',
+      '下午表單',
+      '下班表單',
+      '晚上表單'
+    ];
+    
+    return stages[stageId] || `階段 ${stageId}`;
   };
   
   // 新增勞工
@@ -176,6 +255,8 @@ const CompanyDashboard = () => {
       
       // 新增成功，更新勞工列表
       setWorkers(prev => [...prev, response.data]);
+
+      toast.success('新增勞工成功', TOAST_CONFIG.SUCCESS);
       
       // 重置表單
       setWorkerFormData({
@@ -188,7 +269,9 @@ const CompanyDashboard = () => {
       
     } catch (err) {
       console.error('新增勞工失敗', err);
-      setError(err.response?.data?.message || '新增勞工失敗');
+      //setError(err.response?.data?.message || '新增勞工失敗');
+
+      toast.error('新增勞工失敗，請檢查代碼是否重複', TOAST_CONFIG.ERROR);
     }
   };
   
@@ -198,11 +281,13 @@ const CompanyDashboard = () => {
     
     // 檢查密碼是否一致
     if (userFormData.password !== userFormData.confirm_password) {
-      setError('兩次輸入的密碼不一致');
+      //setError('兩次輸入的密碼不一致');
+      toast.error('兩次輸入密碼不一致', TOAST_CONFIG.ERROR);
       return;
     }
     else if (userFormData.password.length < 8) {
-      setError('密碼長度至少為8個字符');
+      //setError('密碼長度至少為8個字符');
+      toast.error('密碼長度至少為8位', TOAST_CONFIG.ERROR);
       return;
     }
     
@@ -225,6 +310,9 @@ const CompanyDashboard = () => {
       // 新增成功，更新使用者列表
       setUsers(prev => [...prev, response.data]);
       console.log('新增使用者成功:', response.data);
+
+      // 顯示成功提示
+      toast.success('新增使用者成功', TOAST_CONFIG.SUCCESS);
       
       // 重置表單
       setUserFormData({
@@ -243,7 +331,8 @@ const CompanyDashboard = () => {
       console.error('錯誤狀態:', err.response?.status);
       console.error('錯誤數據:', err.response?.data);
       console.error('新增使用者失敗', err);
-      setError(err.response?.data?.message || '新增使用者失敗');
+      //setError(err.response?.data?.message || '新增使用者失敗');
+      toast.error('新增使用者失敗', TOAST_CONFIG.ERROR);
     }
   };
   
@@ -410,7 +499,7 @@ const CompanyDashboard = () => {
                     <tr>
                       <th>姓名</th>
                       <th>勞工代碼</th>
-                      <th>專屬連結</th>
+                      <th>表單專屬連結</th>
                       <th>操作</th>
                     </tr>
                   </thead>
@@ -431,7 +520,15 @@ const CompanyDashboard = () => {
                           </div>
                         </td>
                         <td>
-                          <button className="action-button view">查看資料</button>
+                          <div className="action-buttons">
+                            <button className="action-button view bg-pink">查看資料</button>
+                            <button 
+                              className="action-button delete"
+                              onClick={() => handleDeleteWorker(worker.id, worker.name)}
+                            >
+                              刪除
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -489,7 +586,7 @@ const CompanyDashboard = () => {
                         <tr key={submission.id}>
                           <td>{new Date(submission.submission_time).toLocaleString()}</td>
                           <td>{submission.form_type_name}</td>
-                          <td>第 {submission.submission_count} 批次</td>
+                          <td>第 {submission.submission_count} 批次-第 {submission.stage+1} 時段 ({getStageNameById(submission.stage)})</td>                       
                           <td>
                           <button 
                             className="action-button view"
@@ -623,10 +720,12 @@ const CompanyDashboard = () => {
                                   api.users.delete(user.id)
                                     .then(() => {
                                       setUsers(prev => prev.filter(u => u.id !== user.id));
+                                      toast.success('刪除使用者成功', TOAST_CONFIG.SUCCESS);
                                     })
                                     .catch(err => {
                                       console.error('刪除使用者失敗', err);
-                                      setError('刪除使用者失敗');
+                                      //setError('刪除使用者失敗');
+                                      toast.error('刪除使用者失敗，只有公司老闆有此功能', TOAST_CONFIG.ERROR);
                                     });
                                 }
                               }}
@@ -664,8 +763,9 @@ const CompanyDashboard = () => {
           <div className="modal-body">
             <p><strong>提交時間:</strong> {new Date(activeSubmission.submission_time).toLocaleString()}</p>
             <p><strong>表單類型:</strong> {activeSubmission.form_type_name}</p>
-            <p><strong>批次:</strong> 第 {activeSubmission.submission_count} 批次</p>
-            
+            <p><strong>批次:</strong> 第 {activeSubmission.submission_count} 批次-第 {activeSubmission.stage+1} 時段</p>
+            <p><strong>階段:</strong> {getStageNameById(activeSubmission.stage)}</p>
+                        
             <h4>填寫內容:</h4>
             <div className="form-data-display">
               {Object.entries(activeSubmission.data).map(([key, value]) => (

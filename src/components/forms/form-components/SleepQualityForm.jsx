@@ -1,9 +1,10 @@
-// src/components/forms/SleepQualityForm.jsx
+// src/components/forms/form-components/SleepQualityForm.jsx
+// 睡眠品質
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import '../../styles/FormComponents.css';
+import '../../../styles/FormComponents.css'; // 假設這是你的 CSS 檔案路徑
 
-const SleepQualityForm = ({ workerCode, companyCode, batchNumber, formTypeId, onSubmitSuccess }) => {
+const SleepQualityForm = ({ workerCode, companyCode, batchNumber, formTypeId, timeSegment, stage = 0, onSubmitSuccess }) => {
   const [worker, setWorker] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -11,7 +12,8 @@ const SleepQualityForm = ({ workerCode, companyCode, batchNumber, formTypeId, on
   
   // 表單數據 - 睡眠相關
   const [sleepData, setSleepData] = useState({
-    sleep_hours: ''
+    sleep_hours: '',
+    sleep_quality: '' // 新增睡眠品質欄位
   });
   
   // 使用傳入的 workerCode 和 companyCode 獲取勞工資料
@@ -50,6 +52,12 @@ const SleepQualityForm = ({ workerCode, companyCode, batchNumber, formTypeId, on
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // 檢查是否所有欄位都已填寫
+    if (!sleepData.sleep_hours || !sleepData.sleep_quality) {
+      setError('請填寫所有欄位');
+      return;
+    }
+    
     try {
       // 獲取勞工資料 (已經在worker中)
       const workerId = worker.id;
@@ -57,8 +65,9 @@ const SleepQualityForm = ({ workerCode, companyCode, batchNumber, formTypeId, on
       // 整合所有表單數據
       const combinedFormData = {
         ...sleepData,
-        time_segment: formTypeId,
-        batch_number: batchNumber
+        time_segment: timeSegment,
+        batch_number: batchNumber,
+        stage: stage || 0 //傳入時段
       };
       
       // 準備提交的數據
@@ -66,7 +75,9 @@ const SleepQualityForm = ({ workerCode, companyCode, batchNumber, formTypeId, on
         worker_id: workerId,
         form_type_id: formTypeId,
         submission_count: batchNumber,
-        form_data: combinedFormData
+        time_segment: timeSegment,
+        form_data: combinedFormData,
+        stage: stage
       };
       
       console.log('將提交以下數據:', submitData);
@@ -118,10 +129,10 @@ const SleepQualityForm = ({ workerCode, companyCode, batchNumber, formTypeId, on
       <div className="success-container">
         <h2>表單提交成功</h2>
         <p>感謝您填寫睡眠時數調查。</p>
-        <p>這是第{batchNumber}批次的提交。</p>
+        <p>這是第{batchNumber}批次的第{stage}時段提交。</p>
         <button onClick={() => {
           if (typeof onSubmitSuccess === 'function') {
-            onSubmitSuccess();
+            onSubmitSuccess(formTypeId);
           }
         }} className="back-to-list-button">
           返回表單列表
@@ -134,21 +145,23 @@ const SleepQualityForm = ({ workerCode, companyCode, batchNumber, formTypeId, on
     <div className="form-container">
       <header className="form-header">
         <h1>勞工健康數據平台</h1>
-        <h2>睡眠時數調查 (第{batchNumber}批次)</h2>
+        <h2>睡眠時數調查 (第{batchNumber}批次-第{stage}時段)</h2>
       </header>
       
       <div className="form-content">
         <div className="worker-info">
           <p>您好，<strong>{worker?.name || '勞工'}</strong></p>
           <p>勞工代碼: {worker?.code || workerCode}</p>
-          <p>請填寫以下睡眠時數相關問題</p>
+          <p>請填寫以下睡眠相關問題</p>
         </div>
         
         <form onSubmit={handleSubmit} className="health-form">
           <div className="form-section">
-            <h3>睡眠時數調查</h3>
+            <h3>睡眠品質問卷</h3>
+            
+            {/* 問題1: 睡眠時數 */}
             <div className="form-group">
-              <label htmlFor="sleep_hours">昨晚您實際的睡眠時數：</label>
+              <label htmlFor="sleep_hours">1. 昨晚您實際的睡眠時數：</label>
               <input
                 type="number"
                 id="sleep_hours"
@@ -161,6 +174,68 @@ const SleepQualityForm = ({ workerCode, companyCode, batchNumber, formTypeId, on
                 step="0.5"
               />
               <span>小時</span>
+            </div>
+            
+            {/* 問題2: 睡眠品質 */}
+            <div className="form-group">
+              <label>2. 您覺得昨晚的整體睡眠品質如何？</label>
+              <div className="radio-group">
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="sleep_quality"
+                    value="非常差"
+                    checked={sleepData.sleep_quality === '非常差'}
+                    onChange={handleSleepInputChange}
+                    required
+                  />
+                  <span>非常差</span>
+                </label>
+                
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="sleep_quality"
+                    value="差"
+                    checked={sleepData.sleep_quality === '差'}
+                    onChange={handleSleepInputChange}
+                  />
+                  <span>差</span>
+                </label>
+                
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="sleep_quality"
+                    value="普通"
+                    checked={sleepData.sleep_quality === '普通'}
+                    onChange={handleSleepInputChange}
+                  />
+                  <span>普通</span>
+                </label>
+                
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="sleep_quality"
+                    value="好"
+                    checked={sleepData.sleep_quality === '好'}
+                    onChange={handleSleepInputChange}
+                  />
+                  <span>好</span>
+                </label>
+                
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="sleep_quality"
+                    value="非常好"
+                    checked={sleepData.sleep_quality === '非常好'}
+                    onChange={handleSleepInputChange}
+                  />
+                  <span>非常好</span>
+                </label>
+              </div>
             </div>
           </div>
           
