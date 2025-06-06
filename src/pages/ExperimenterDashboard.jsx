@@ -15,13 +15,20 @@ const ExperimenterDashboard = () => {
   const [success, setSuccess] = useState('');
   const [selectedExperiment, setSelectedExperiment] = useState(null);
   const [showExperimentDetail, setShowExperimentDetail] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cooldownTime, setCooldownTime] = useState(0);
   
   // 新增實驗表單狀態
   const [showAddExperimentForm, setShowAddExperimentForm] = useState(false);
   const [experimentFormData, setExperimentFormData] = useState({
     worker_id: '',
     experiment_type: '',
-    experiment_date: new Date().toISOString().substring(0, 10), // 只保留日期部分
+    experiment_date: new Date().toLocaleDateString('zh-TW', { 
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).split('/').reverse().join('-'), // 轉換為 YYYY-MM-DD 格式
     time_period: 1, // 新增：當前填寫的時段
     data: {},
     files: {}
@@ -34,7 +41,7 @@ const ExperimenterDashboard = () => {
   // 更新實驗類型
   const experimentTypes = [
     { id: 'reaction_rod', name: '反應棒' },
-    { id: 'flicker_test', name: '閃爍劑' },
+    { id: 'flicker_test', name: '閃爍計' },
     { id: 'eye_tracking', name: '眼動儀' },
     { id: 'blood_pressure', name: '血壓' }
   ];
@@ -43,17 +50,17 @@ const ExperimenterDashboard = () => {
   const experimentFields = {
     eye_tracking: [
       { name: 'data_file', label: '眼動儀數據檔案', type: 'file', accept: '.csv,.txt,.json,.xlsx' },
-      { name: 'fixation_count', label: '注視次數', type: 'number' },
-      { name: 'saccade_count', label: '眼球跳動次數', type: 'number' },
-      { name: 'average_pupil_size', label: '平均瞳孔大小 (mm)', type: 'number', step: '0.01' },
-      { name: 'focus_duration', label: '專注時間 (秒)', type: 'number' },
-      { name: 'notes', label: '實驗備註', type: 'textarea' }
+      // { name: 'fixation_count', label: '注視次數', type: 'number' },
+      // { name: 'saccade_count', label: '眼球跳動次數', type: 'number' },
+      // { name: 'average_pupil_size', label: '平均瞳孔大小 (mm)', type: 'number', step: '0.01' },
+      // { name: 'focus_duration', label: '專注時間 (秒)', type: 'number' },
+      // { name: 'notes', label: '實驗備註', type: 'textarea' }
     ],
     blood_pressure: [
       { name: 'systolic_pressure', label: '收縮壓 (mmHg)', type: 'number' },
       { name: 'diastolic_pressure', label: '舒張壓 (mmHg)', type: 'number' },
       { name: 'heart_rate', label: '心率 (bpm)', type: 'number' },
-      { name: 'measurement_time', label: '測量時間', type: 'datetime-local' },
+      // { name: 'measurement_time', label: '測量時間', type: 'datetime-local' },
       { name: 'notes', label: '實驗備註', type: 'textarea' }
     ]
   };
@@ -138,7 +145,7 @@ const ExperimenterDashboard = () => {
           const filledPeriods = [];
           for (let period = 1; period <= 5; period++) {
             const hasData = [1, 2, 3, 4, 5].some(trial => 
-              todayExperiment.data[`period_${period}_trial_${trial}`]
+              todayExperiment.data && todayExperiment.data[`period_${period}_trial_${trial}`]
             );
             if (hasData) {
               filledPeriods.push(period);
@@ -148,6 +155,20 @@ const ExperimenterDashboard = () => {
           // 更新可用時段
           const remaining = [1, 2, 3, 4, 5].filter(p => !filledPeriods.includes(p));
           setAvailablePeriods(remaining);
+
+          // 設定時段為第一個可用時段
+          if (remaining.length > 0) {
+            setExperimentFormData(prev => ({
+              ...prev,
+              time_period: remaining[0]
+            }));
+          } else {
+            // 如果所有時段都已完成，設定為最後一個時段
+            setExperimentFormData(prev => ({
+              ...prev,
+              time_period: 5
+            }));
+          }
           
           return todayExperiment;
         }
@@ -156,6 +177,10 @@ const ExperimenterDashboard = () => {
       // 沒有找到今日實驗，重置狀態
       setCurrentExperiment(null);
       setAvailablePeriods([1, 2, 3, 4, 5]);
+      setExperimentFormData(prev => ({
+        ...prev,
+        time_period: 1
+      }));
       return null;
       
     } catch (err) {
@@ -171,6 +196,10 @@ const ExperimenterDashboard = () => {
     } else {
       setCurrentExperiment(null);
       setAvailablePeriods([1, 2, 3, 4, 5]);
+      setExperimentFormData(prev => ({
+        ...prev,
+        time_period: 1
+      }));
     }
   };
   
@@ -265,22 +294,46 @@ const ExperimenterDashboard = () => {
     }
     
     try {
+      setIsSubmitting(true);
+      setCooldownTime(3); // 開始倒數
+      
+      // 開始倒數計時
+      const countdown = setInterval(() => {
+        setCooldownTime(prev => {
+          if (prev <= 1) {
+            clearInterval(countdown);
+            setIsSubmitting(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
       const token = localStorage.getItem('token');
       
       if (currentExperiment) {
         // 更新現有實驗記錄
         const updatedData = { ...currentExperiment.data, ...experimentFormData.data };
         
-        const response = await axios.put(`/api/experiments/${currentExperiment.id}/`, {
+        const response = await axios.put(`http://localhost:8000/api/experiments/${currentExperiment.id}/`, {
           data: updatedData
         }, {
           headers: { Authorization: `Token ${token}` }
         });
         
+        // 更新當前實驗狀態
+        setCurrentExperiment(response.data);
+        
         // 更新本地實驗列表
         setExperiments(prev => prev.map(exp => 
           exp.id === currentExperiment.id ? response.data : exp
         ));
+
+        toast.success("實驗記錄更新完成！", {
+          position: "top-right",
+          autoClose: 2000,
+          theme: "light"
+        });
         
         setSuccess(`第${experimentFormData.time_period}時段數據已更新！`);
         
@@ -288,23 +341,54 @@ const ExperimenterDashboard = () => {
         // 創建新實驗記錄
         const experimentTime = `${experimentFormData.experiment_date}T${new Date().toTimeString().substring(0, 8)}`;
         
-        const response = await axios.post('/api/experiments/', {
-          worker: experimentFormData.worker_id,
-          experimenter: user.id,
-          experiment_time: experimentTime,
-          experiment_type: experimentFormData.experiment_type,
-          data: experimentFormData.data
-        }, {
-          headers: { Authorization: `Token ${token}` }
-        });
+        // 如果有檔案需要上傳，使用 FormData
+        const hasFiles = Object.keys(experimentFormData.files).length > 0;
         
-        setExperiments(prev => [...prev, response.data]);
-        setCurrentExperiment(response.data);
+        if (hasFiles) {
+          const formData = new FormData();
+          formData.append('worker', experimentFormData.worker_id);
+          formData.append('experimenter', user.id);
+          formData.append('experiment_time', experimentTime);
+          formData.append('experiment_type', experimentFormData.experiment_type);
+          formData.append('data', JSON.stringify(experimentFormData.data));
+          
+          // 添加檔案
+          Object.entries(experimentFormData.files).forEach(([key, file]) => {
+            if (file) {
+              formData.append(`file_${key}`, file);
+            }
+          });
+          
+          const response = await axios.post('http://localhost:8000/api/experiments/', formData, {
+            headers: { 
+              Authorization: `Token ${token}`,
+              'Content-Type': 'multipart/form-data'
+            }
+          });
+          
+          setExperiments(prev => [...prev, response.data]);
+          setCurrentExperiment(response.data);
+        } else {
+          // 沒有檔案，使用 JSON
+          const response = await axios.post('http://localhost:8000/api/experiments/', {
+            worker: experimentFormData.worker_id,
+            experimenter: user.id,
+            experiment_time: experimentTime,
+            experiment_type: experimentFormData.experiment_type,
+            data: experimentFormData.data
+          }, {
+            headers: { Authorization: `Token ${token}` }
+          });
+
+          toast.success("實驗紀錄創建完成！", {
+            position: "top-right",
+            autoClose: 3000,           
+          });
+          
+          setExperiments(prev => [...prev, response.data]);
+          setCurrentExperiment(response.data);
+        }
         setSuccess(`新實驗記錄已創建，第${experimentFormData.time_period}時段數據已保存！`);
-        toast.success('實驗紀錄保存完成!',{
-          position: "bottom-left",
-          autoClose: 2000,
-        });
       }
       
       // 重新檢查可用時段
@@ -314,10 +398,10 @@ const ExperimenterDashboard = () => {
         experimentFormData.experiment_date
       );
       
-      // 重置當前時段的數據
+      // 重置當前時段的數據，但保留已填寫的數據
       setExperimentFormData(prev => ({
         ...prev,
-        data: {}
+        data: {} // 只清空當前表單數據
       }));
       
       // 3秒後清除成功訊息
@@ -327,6 +411,11 @@ const ExperimenterDashboard = () => {
       
     } catch (err) {
       console.error('保存實驗記錄失敗', err);
+      toast.error("實驗記錄保存失敗", {
+        position: "top-right",
+        autoClose: 2000,
+        theme: "light"
+      });
       setError(err.response?.data?.message || '保存實驗記錄失敗');
     }
   };
@@ -567,8 +656,8 @@ const ExperimenterDashboard = () => {
             {/* 當前實驗狀態顯示 */}
             {currentExperiment && (
               <div className="current-experiment-status">
-                <h4>📋 今日實驗進度</h4>
-                <p>已找到今日的實驗記錄，您可以繼續填寫剩餘時段。</p>
+                <h4>📋 實驗進度</h4>
+                <p>已找到此日期的實驗記錄，您可以繼續填寫剩餘時段。</p>
                 {availablePeriods.length === 0 ? (
                   <p className="completed">✅ 所有時段已完成！</p>
                 ) : (
@@ -582,8 +671,8 @@ const ExperimenterDashboard = () => {
             {renderExperimentFields()}
             
             {availablePeriods.length > 0 && (
-              <button type="submit" className="submit-button">
-                {currentExperiment ? '更新時段數據' : '保存實驗記錄'}
+              <button type="submit" disabled={isSubmitting} className="submit-button">
+                {isSubmitting ? `請等待 ${cooldownTime} 秒` : '保存實驗記錄'}
               </button>
             )}
           </form>

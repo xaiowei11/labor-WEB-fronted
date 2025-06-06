@@ -26,8 +26,10 @@ const SuperExperimenterDashboard = () => {
   const [experimentFormData, setExperimentFormData] = useState({
     worker_id: '',
     experiment_type: '',
-    experiment_date: new Date().toISOString().substring(0, 10), // 只保留日期部分
-    time_period: 1, // 新增：當前填寫的時段
+    experiment_date: new Date().toLocaleDateString('en-CA', { 
+      timeZone: 'Asia/Taipei'
+    }),  // 轉換為 YYYY-MM-DD 格式
+    time_period: 1,
     data: {},
     files: {}
   });
@@ -39,7 +41,7 @@ const SuperExperimenterDashboard = () => {
   // 更新為新的實驗類型
   const experimentTypes = [
     { id: 'reaction_rod', name: '反應棒' },
-    { id: 'flicker_test', name: '閃爍劑' },
+    { id: 'flicker_test', name: '閃爍計' },
     { id: 'eye_tracking', name: '眼動儀' },
     { id: 'blood_pressure', name: '血壓' }
   ];
@@ -154,6 +156,14 @@ const SuperExperimenterDashboard = () => {
   
   // 檢查今日實驗記錄
   const checkTodayExperiment = async (workerId, experimentType, date) => {
+
+    console.log('=== checkTodayExperiment 調試 ===');
+    console.log('勞工ID:', workerId);
+    console.log('實驗類型:', experimentType);
+    console.log('檢查日期:', date);
+    console.log('日期類型:', typeof date);
+    console.log('================================');
+
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Token ${token}` };
@@ -173,7 +183,7 @@ const SuperExperimenterDashboard = () => {
           const filledPeriods = [];
           for (let period = 1; period <= 5; period++) {
             const hasData = [1, 2, 3, 4, 5].some(trial => 
-              todayExperiment.data[`period_${period}_trial_${trial}`]
+              todayExperiment.data && todayExperiment.data[`period_${period}_trial_${trial}`]
             );
             if (hasData) {
               filledPeriods.push(period);
@@ -183,6 +193,20 @@ const SuperExperimenterDashboard = () => {
           // 更新可用時段
           const remaining = [1, 2, 3, 4, 5].filter(p => !filledPeriods.includes(p));
           setAvailablePeriods(remaining);
+
+          // 設定時段為第一個可用時段
+          if (remaining.length > 0) {
+            setExperimentFormData(prev => ({
+              ...prev,
+              time_period: remaining[0]
+            }));
+          } else {
+            // 如果所有時段都已完成，設定為最後一個時段
+            setExperimentFormData(prev => ({
+              ...prev,
+              time_period: 5
+            }));
+          }
           
           return todayExperiment;
         }
@@ -191,6 +215,10 @@ const SuperExperimenterDashboard = () => {
       // 沒有找到今日實驗，重置狀態
       setCurrentExperiment(null);
       setAvailablePeriods([1, 2, 3, 4, 5]);
+      setExperimentFormData(prev => ({
+        ...prev,
+        time_period: 1
+      }));
       return null;
       
     } catch (err) {
@@ -203,9 +231,16 @@ const SuperExperimenterDashboard = () => {
   const handleWorkerOrTypeChange = async (workerId, experimentType, date) => {
     if (workerId && experimentType && ['reaction_rod', 'flicker_test'].includes(experimentType)) {
       await checkTodayExperiment(workerId, experimentType, date);
+      // checkTodayExperiment 函數內部已經處理了 time_period 的設定，這裡不需要重複設定
     } else {
       setCurrentExperiment(null);
       setAvailablePeriods([1, 2, 3, 4, 5]);
+      
+      // 重置時段為1
+      setExperimentFormData(prev => ({
+        ...prev,
+        time_period: 1
+      }));
     }
   };
   
@@ -215,12 +250,50 @@ const SuperExperimenterDashboard = () => {
   };
   
   // 處理勞工選擇變更
-  const handleWorkerChange = (e) => {
-    setSelectedWorker(e.target.value);
+  const handleWorkerChange = async (e) => {
+    const workerId = e.target.value;
+    setSelectedWorker(workerId);
+    
+    // 清除當前實驗狀態
+    setCurrentExperiment(null);
+    setAvailablePeriods([1, 2, 3, 4, 5]);
+    
     setExperimentFormData(prev => ({
       ...prev,
-      worker_id: e.target.value
+      worker_id: workerId,
+      // 移除強制重置 time_period，讓系統自動檢測正確時段
+      data: {},        // 清空表單數據
+      files: {}        // 清空檔案數據
     }));
+    
+    // 當選擇勞工時，立即載入該勞工的實驗記錄
+    if (workerId) {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = { Authorization: `Token ${token}` };
+        
+        const response = await axios.get(`http://localhost:8000/api/workers/${workerId}/experiments/`, { headers });
+        if (Array.isArray(response.data)) {
+          setExperiments(response.data);
+        } else {
+          console.error('實驗資料不是陣列:', response.data);
+          setExperiments([]);
+        }
+        
+        // 如果當前已經選擇了實驗類型，重新檢查新勞工的實驗記錄
+        if (experimentFormData.experiment_type) {
+          await handleWorkerOrTypeChange(workerId, experimentFormData.experiment_type, experimentFormData.experiment_date);
+        }
+        
+      } catch (err) {
+        console.error('載入實驗資料失敗:', err);
+        setExperiments([]);
+        setError('載入實驗資料失敗');
+      }
+    } else {
+      // 如果沒有選擇勞工，清空實驗記錄
+      setExperiments([]);
+    }
   };
   
   // 處理單個時段的輸入變更
@@ -256,6 +329,13 @@ const SuperExperimenterDashboard = () => {
         files: {}
       }));
       
+      console.log('=== 選擇實驗類型調試 ===');
+      console.log('選擇的實驗類型:', value);
+      console.log('當前勞工ID:', experimentFormData.worker_id);
+      console.log('當前實驗日期:', experimentFormData.experiment_date);
+      console.log('日期類型:', typeof experimentFormData.experiment_date);
+      console.log('========================');
+
       // 檢查今日實驗
       if (experimentFormData.worker_id && value) {
         await handleWorkerOrTypeChange(experimentFormData.worker_id, value, experimentFormData.experiment_date);
@@ -336,8 +416,7 @@ const SuperExperimenterDashboard = () => {
         // 更新現有實驗記錄
         const updatedData = { ...currentExperiment.data, ...experimentFormData.data };
         
-        const response = await axios.put(`/api/experiments/${currentExperiment.id}/`, {
-          data: updatedData
+        const response = await axios.put(`http://localhost:8000/api/experiments/${currentExperiment.id}/`, {          data: updatedData
         }, {
           headers: { Authorization: `Token ${token}` }
         });
