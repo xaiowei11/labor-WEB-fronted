@@ -198,6 +198,33 @@ const api = {
     getSuperExperimenterExperiments: () => apiClient.get('/api/super-experimenter/experiments/'),
   },
   
+  // 眼動儀分析相關 - 新增的分析功能
+  analysis: {
+    // 分析實驗數據
+    analyzeExperiment: (experimentId: number) => {
+      return apiClient.post(`/api/experiments/${experimentId}/analyze/`);
+    },
+
+    // 獲取分析結果
+    getAnalysisResult: (experimentId: number) => {
+      return apiClient.get(`/api/experiments/${experimentId}/analysis-result/`);
+    },
+
+    // 獲取分析狀態
+    getAnalysisStatus: (experimentId: number) => {
+      return apiClient.get(`/api/experiments/${experimentId}/analysis-status/`);
+    },
+
+    // 下載分析檔案
+    downloadFile: (experimentId: number, filename: string) => {
+      return fetch(`http://localhost:8000/api/experiments/${experimentId}/download/${filename}/`, {
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`
+        }
+      });
+    }
+  },
+  
   // 使用者相關
   users: {
     // 獲取公司使用者

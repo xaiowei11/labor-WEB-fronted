@@ -20,6 +20,95 @@ const SuperExperimenterDashboard = () => {
   const [showExperimentDetail, setShowExperimentDetail] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cooldownTime, setCooldownTime] = useState(0);
+
+  // 休息功能相關狀態
+  const [isOnBreak, setIsOnBreak] = useState(false);
+  const [showBreakModal, setShowBreakModal] = useState(false);
+  const [breakStartTime, setBreakStartTime] = useState(null);
+  const [breakReason, setBreakReason] = useState('');
+  const [otherReason, setOtherReason] = useState('');
+  const [breakRecords, setBreakRecords] = useState([]);
+  const [currentBreakId, setCurrentBreakId] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // 休息原因選項
+  const BREAK_REASONS = [
+    '裝水或洗手間等休息情境',
+    '開會做測試',
+    '吃午餐',
+    '午休',
+    '午休(非睡眠)',
+    '其他'
+  ];
+
+  const handleStartBreak = () => {
+    setShowBreakModal(true);
+  };
+
+  const handleConfirmBreak = async () => {
+    if (!breakReason) {
+      toast.error('請選擇離開原因');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const startTime = new Date().toISOString();
+      
+      const breakData = {
+        worker: selectedWorker,
+        experiment: currentExperiment?.id || null,
+        record_date: experimentFormData.experiment_date,
+        start_time: startTime,
+        reason: breakReason === '其他' ? otherReason : breakReason
+      };
+      
+      const response = await axios.post('http://localhost:8000/api/break-records/', breakData, {
+        headers: { Authorization: `Token ${token}` }
+      });
+      
+      setCurrentBreakId(response.data.id);
+      setBreakStartTime(startTime);
+      setIsOnBreak(true);
+      setShowBreakModal(false);
+      
+      toast.success('已記錄離開時間');
+    } catch (err) {
+      console.error('記錄休息開始失敗:', err);
+      toast.error('記錄休息開始失敗');
+    }
+  };
+
+  const handleEndBreak = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const endTime = new Date().toISOString();
+      
+      await axios.put(`http://localhost:8000/api/break-records/${currentBreakId}/`, {
+        end_time: endTime
+      }, {
+        headers: { Authorization: `Token ${token}` }
+      });
+      
+      toast.success('休息記錄已保存');
+      
+      // 重置狀態
+      setIsOnBreak(false);
+      setBreakStartTime(null);
+      setCurrentBreakId(null);
+      setBreakReason('');
+      setOtherReason('');
+    } catch (err) {
+      console.error('記錄休息結束失敗:', err);
+      toast.error('記錄休息結束失敗');
+    }
+  };
+
+  const handleCancelBreak = () => {
+    setShowBreakModal(false);
+    setBreakReason('');
+    setOtherReason('');
+  };
   
   // 實驗表單狀態
   const [showAddExperimentForm, setShowAddExperimentForm] = useState(false);
@@ -77,6 +166,18 @@ const SuperExperimenterDashboard = () => {
     
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    let interval;
+    if (isOnBreak) {
+      interval = setInterval(() => {
+        setCurrentTime(new Date());
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isOnBreak]);
   
   // 載入公司列表
   useEffect(() => {
@@ -307,6 +408,94 @@ const SuperExperimenterDashboard = () => {
         [fieldName]: value
       }
     }));
+  };
+  
+  // 處理眼動儀數據分析
+  const handleEyeTrackingAnalysis = async () => {
+    if (!experimentFormData.files.data_file) {
+      toast.error('請先上傳眼動儀數據檔案', {
+        position: "top-right",
+        autoClose: 2000,
+        theme: "light"
+      });
+      return;
+    }
+
+    try {
+      toast.info('正在分析眼動儀數據...', {
+        position: "top-right",
+        autoClose: 2000,
+        theme: "light"
+      });
+
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('data_file', experimentFormData.files.data_file);
+      formData.append('worker_id', experimentFormData.worker_id);
+      formData.append('experiment_date', experimentFormData.experiment_date);
+
+      // 調用後端分析 API
+      const response = await axios.post('http://localhost:8000/api/analyze-eye-tracking/', formData, {
+        headers: { 
+          Authorization: `Token ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (response.data.success) {
+        toast.success('眼動儀數據分析完成！', {
+          position: "top-right",
+          autoClose: 3000,
+          theme: "light"
+        });
+        
+        // 可以在這裡更新分析結果或觸發下載
+        if (response.data.download_url) {
+          // 使用帶認證的方式下載檔案
+          const token = localStorage.getItem('token');
+          
+          // 創建帶認證的下載請求
+          fetch(`http://localhost:8000${response.data.download_url}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Token ${token}`
+            }
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('下載失敗');
+            }
+            return response.blob();
+          })
+          .then(blob => {
+            // 創建下載連結
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `eyetracking_analysis_${experimentFormData.experiment_date}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+          })
+          .catch(error => {
+            console.error('下載錯誤:', error);
+            toast.error('下載分析結果失敗', {
+              position: "top-right",
+              autoClose: 3000,
+              theme: "light"
+            });
+          });
+        }
+      }
+    } catch (err) {
+      console.error('眼動儀數據分析失敗:', err);
+      toast.error('眼動儀數據分析失敗', {
+        position: "top-right",
+        autoClose: 3000,
+        theme: "light"
+      });
+    }
   };
   
   // 處理實驗表單輸入變更
@@ -637,13 +826,35 @@ const SuperExperimenterDashboard = () => {
                 rows={3}
               />
             ) : field.type === 'file' ? (
-              <input
-                type="file"
-                id={field.name}
-                name={field.name}
-                onChange={handleInputChange}
-                accept={field.accept}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input
+                  type="file"
+                  id={field.name}
+                  name={field.name}
+                  onChange={handleInputChange}
+                  accept={field.accept}
+                />
+                {/* 眼動儀專用分析按鈕 */}
+                {experimentFormData.experiment_type === 'eye_tracking' && field.name === 'data_file' && (
+                  <button
+                    type="button"
+                    className="analysis-button"
+                    onClick={handleEyeTrackingAnalysis}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    分析數據
+                  </button>
+                )}
+              </div>
             ) : (
               <input
                 type={field.type}
@@ -734,6 +945,35 @@ const SuperExperimenterDashboard = () => {
                 {showAddExperimentForm ? '取消' : '新增實驗記錄'}
               </button>
             </div>
+
+            {selectedWorker &&(
+                  <div className="break-control-section mb-4">
+                    <div className="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div>
+                        <h4 className="font-medium text-gray-900">實驗進行控制</h4>
+                        <p className="text-sm text-gray-600">記錄勞工離開和回來的時間</p>
+                      </div>
+                      {!isOnBreak ? (
+                        <button
+                          type="button"
+                          onClick={handleStartBreak}
+                          className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                        >
+                          🚶‍♂️ 休息
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleEndBreak}
+                          className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors animate-pulse"
+                        >
+                          ✅ 回來了
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
             
             {/* 新增實驗表單 */}
             {showAddExperimentForm && (
@@ -858,6 +1098,85 @@ const SuperExperimenterDashboard = () => {
           onClose={handleCloseExperimentDetail}
         />
       )}
+
+      {/* 休息原因選擇模態框 */}
+        {showBreakModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">請選擇離開原因</h3>
+              <div className="space-y-3">
+                {BREAK_REASONS.map((reason) => (
+                  <label key={reason} className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="breakReason"
+                      value={reason}
+                      checked={breakReason === reason}
+                      onChange={(e) => setBreakReason(e.target.value)}
+                      className="text-blue-600"
+                    />
+                    <span>{reason}</span>
+                  </label>
+                ))}
+              </div>
+              
+              {breakReason === '其他' && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    請說明：
+                  </label>
+                  <input
+                    type="text"
+                    value={otherReason}
+                    onChange={(e) => setOtherReason(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    placeholder="請輸入其他原因"
+                  />
+                </div>
+              )}
+              
+              <div className="flex space-x-3 mt-6">
+                <button
+                  onClick={handleCancelBreak}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleConfirmBreak}
+                  className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+                >
+                  確認離開
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 休息中的覆蓋層 */}
+        {isOnBreak && (
+          <div className="fixed inset-0 bg-yellow-100 bg-opacity-95 flex items-center justify-center z-40">
+            <div className="text-center">
+              <div className="text-6xl mb-4">☕</div>
+              <h2 className="text-4xl font-bold text-gray-800 mb-2">休息中...</h2>
+              <p className="text-xl text-gray-600 mb-4">
+                離開原因: {breakReason === '其他' ? otherReason : breakReason}
+              </p>
+              <p className="text-lg text-gray-500 mb-2">
+                離開時間: {breakStartTime ? new Date(breakStartTime).toLocaleTimeString() : ''}
+              </p>
+              <p className="text-lg text-gray-500 mb-4">
+                目前時間: {new Date().toLocaleTimeString()}
+              </p>
+              <button
+                onClick={handleEndBreak}
+                className="mt-8 px-8 py-4 bg-blue-500 text-white text-xl rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                回來了
+              </button>
+            </div>
+          </div>
+        )}
       
       <footer className="dashboard-footer">
         <p>&copy; 2025 勞工健康數據平台</p>
@@ -867,3 +1186,6 @@ const SuperExperimenterDashboard = () => {
 };
 
 export default SuperExperimenterDashboard;
+
+
+
